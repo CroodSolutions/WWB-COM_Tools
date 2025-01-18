@@ -1,0 +1,125 @@
+Option Explicit
+
+Public Module Module1
+
+    'Persistance via scheduled task.
+    'This script will create a scheduled task to launch Calc.exe after 24 hours.
+    'Modify Calc.exe to what you want to launch for your testing. 
+    'Alter duration as needed. 
+    'Note the program running the script will need to be running as administrator to make this work. 
+    'Credit to AnuraTheAmphibian for intial version of this as part of BypassIT, now ported to basic.    
+
+    Sub Main
+        
+        Dim sCurrentDir As String
+        Dim sOutputFile As String
+        
+        ' This mimics @ScriptDir in AutoIt
+        sCurrentDir = CurDir
+        sOutputFile = sCurrentDir & "\output.txt"
+
+        ' 1) Calculate date/time for 24 hours from now
+        Dim dtNow As Date
+        dtNow = Now
+
+        Dim dtFuture As Date
+        On Error Resume Next
+        dtFuture = DateAdd("h", 24, dtNow)
+        If Err.Number <> 0 Then
+            WriteToFile sOutputFile, "Error: Could not calculate 24 hours from now." & vbCrLf
+            Exit Sub
+        End If
+        On Error GoTo 0
+
+        ' Convert that future Date to a string in "yyyy-MM-dd HH:mm:ss" format
+        Dim sTime As String
+        sTime = Format$(dtFuture, "yyyy-MM-dd HH:mm:ss")
+        If sTime = "" Then
+            WriteToFile sOutputFile, "Error: Empty time string for 24 hours from now." & vbCrLf
+            Exit Sub
+        End If
+
+        ' 2) Split into [Date, Time] => sTimeParts(0) = "yyyy-MM-dd", sTimeParts(1) = "HH:mm:ss"
+        Dim sTimeParts() As String
+        sTimeParts = Split(sTime, " ")
+        If UBound(sTimeParts) < 1 Then
+            WriteToFile sOutputFile, "Error: Could not split date/time into two parts." & vbCrLf
+            Exit Sub
+        End If
+
+        ' Convert "yyyy-MM-dd" => "MM/dd/yyyy"
+        Dim sDateParts() As String
+        sDateParts = Split(sTimeParts(0), "-")
+        If UBound(sDateParts) < 2 Then
+            WriteToFile sOutputFile, "Error: Could not parse date string." & vbCrLf
+            Exit Sub
+        End If
+        
+        Dim sSchedDate As String
+        sSchedDate = sDateParts(1) & "/" & sDateParts(2) & "/" & sDateParts(0) ' e.g. "08/15/2025"
+
+        ' Convert "HH:mm:ss" => "HH:mm"
+        Dim sHmsParts() As String
+        sHmsParts = Split(sTimeParts(1), ":")
+        If UBound(sHmsParts) < 1 Then
+            WriteToFile sOutputFile, "Error: Could not parse time string." & vbCrLf
+            Exit Sub
+        End If
+
+        Dim sSchedTime As String
+        sSchedTime = sHmsParts(0) & ":" & sHmsParts(1)  ' e.g. "14:30"
+
+        ' 3) Create the scheduled task via schtasks /Create
+        '    /SC ONCE => run one time
+        '    /ST => HH:mm (24-hour format)
+        '    /SD => mm/dd/yyyy
+        '    /TR => the command to run (calc.exe)
+        '    /TN => Task name
+        Dim sTaskName As String
+        Dim sExecutable As String
+        sTaskName = "ScheduledTaskTest1"
+        sExecutable = "calc.exe"  ' Runs calculator as the payload
+
+        ' Build the schtasks command
+        Dim sCommand As String
+        sCommand = "schtasks /Create /TN """ & sTaskName & """ /TR """ & sExecutable & """ /SC ONCE /ST " _
+                   & sSchedTime & " /SD " & sSchedDate & " /F"
+
+        ' Tip: If you need to run as a specific user or System, add /RU, etc.
+        ' e.g., /RU "SYSTEM" /RL HIGHEST /IT
+
+        ' 4) Execute the command and capture result
+        Dim iReturn As Long
+        Dim wsh As Object
+        Set wsh = CreateObject("WScript.Shell")
+
+        On Error Resume Next
+        iReturn = wsh.Run("cmd /c " & sCommand, 0, True)
+        If Err.Number <> 0 Then
+            WriteToFile sOutputFile, "Error: Unable to run schtasks command. " & Err.Description & vbCrLf
+            Exit Sub
+        End If
+        On Error GoTo 0
+
+        ' 0 => success
+        If iReturn = 0 Then
+            WriteToFile sOutputFile, "Success: Scheduled task '" & sTaskName & "' created for " & sSchedDate & " at " & sSchedTime & vbCrLf
+        Else
+            WriteToFile sOutputFile, "Error: schtasks returned code " & iReturn & vbCrLf & "Command was: " & sCommand & vbCrLf
+        End If
+
+    End Sub
+
+    ' Utility for appending (or creating) text in a file
+    Sub WriteToFile(filePath As String, text As String)
+        Dim fileNum As Integer
+        fileNum = FreeFile
+        On Error Resume Next
+
+        Open filePath For Append As #fileNum
+        Print #fileNum, text
+        Close #fileNum
+
+    End Sub
+    
+End Module
