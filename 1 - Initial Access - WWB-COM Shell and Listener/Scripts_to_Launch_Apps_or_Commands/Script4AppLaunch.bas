@@ -10,7 +10,7 @@ Public Module Module1
 
     Sub Main
         
-Shell "PowerShell.exe", vbNormalFocus : :
+Shell "PowerShell.exe", vbNormalFocus 
 
 
     End Sub
