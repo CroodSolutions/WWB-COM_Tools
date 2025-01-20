@@ -1,0 +1,56 @@
+'#Language "WWB-COM"
+
+'For internal testing, this script will provide a user dialog box and pop the calculator up one minute later if it works.
+'This is more helpful to give rapid feedback to testers, when the goal is a quick test (vs red teaming with actual payload).   
+
+Option Explicit
+
+Sub Main
+
+        Dim dtNow As Date
+        Dim dtFuture As Date
+        Dim sSchedDate As String
+        Dim sSchedTime As String
+        Dim sTaskName As String
+        Dim sExecutable As String
+        Dim sCommand As String
+        Dim iReturn As Long
+        Dim wsh As Object
+
+        'Get the current time
+        dtNow = Now
+
+        'Calculate the time one minute from now
+        dtFuture = DateAdd("n", 1, dtNow)
+
+        'Format the date and time for schtasks
+        ' Date in mm/dd/yyyy format
+        sSchedDate = Format$(dtFuture, "MM/dd/yyyy")
+        ' Time in HH:mm format (24-hour clock)
+        sSchedTime = Format$(dtFuture, "HH:mm")
+
+        'Define the task name and executable to launch
+        sTaskName = "ScheduledTaskTest1"
+        sExecutable = "calc.exe"  ' Runs calculator as the payload
+
+        'Build the schtasks command
+        sCommand = "schtasks /Create /TN """ & sTaskName & """ /TR """ & sExecutable & """ /SC ONCE /ST " _
+                   & sSchedTime & " /SD " & sSchedDate & " /F"
+
+        'Execute the command to create the task
+        Set wsh = CreateObject("WScript.Shell")
+        On Error Resume Next
+        iReturn = wsh.Run("cmd /c " & sCommand, 0, True)
+        On Error GoTo 0
+
+        'Provide feedback based on the result
+        If iReturn = 0 Then
+            MsgBox "Scheduled task '" & sTaskName & "' created successfully!" & vbCrLf & _
+                   "It will run at " & sSchedTime & " on " & sSchedDate, vbInformation, "Task Created"
+        Else
+            MsgBox "Failed to create the scheduled task." & vbCrLf & _
+                   "Command: " & sCommand, vbCritical, "Error"
+        End If
+End Sub
+
+
