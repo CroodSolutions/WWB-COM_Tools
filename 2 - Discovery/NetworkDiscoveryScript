@@ -1,0 +1,104 @@
+Option Explicit
+
+Public Module Module1
+
+    'This WWB-COM script runs a basic port scan for the local network of the target host.  
+
+    Sub Main
+
+        Dim outputFilePath As String
+        Dim psScript As String
+        Dim psFile As String
+        Dim shell As Object
+        Dim processID As Long
+ 
+        ' Define the output file path
+        outputFilePath = Environ("USERPROFILE") & "\Desktop\output.txt"
+ 
+        ' Delete the output file if it already exists
+        If Dir(outputFilePath) <> "" Then Kill outputFilePath
+ 
+        ' PowerShell script content
+        psScript = "function Test-Port {" & vbCrLf & _
+                   "    param (" & vbCrLf & _
+                   "        [string]$TargetHost," & vbCrLf & _
+                   "        [int]$Port" & vbCrLf & _
+                   "    )" & vbCrLf & _
+                   "    try {" & vbCrLf & _
+                   "        $tcpClient = New-Object System.Net.Sockets.TcpClient" & vbCrLf & _
+                   "        $tcpClient.Connect($TargetHost, $Port)" & vbCrLf & _
+                   "        $tcpClient.Close()" & vbCrLf & _
+                   "        return $true" & vbCrLf & _
+                   "    } catch {" & vbCrLf & _
+                   "        return $false" & vbCrLf & _
+                   "    }" & vbCrLf & _
+                   "}" & vbCrLf & _
+                   "" & vbCrLf & _
+                   "function Get-LocalNetworks {" & vbCrLf & _
+                   "    $networkInterfaces = Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -eq $true }" & vbCrLf & _
+                   "    $networks = @()" & vbCrLf & _
+                   "    foreach ($interface in $networkInterfaces) {" & vbCrLf & _
+                   "        if ($interface.IPAddress -ne $null -and $interface.IPSubnet -ne $null -and $interface.DefaultIPGateway -ne $null) {" & vbCrLf & _
+                   "            $network = New-Object PSObject -Property @{" & vbCrLf & _
+                   "                'Name' = $interface.Description" & vbCrLf & _
+                   "                'IPAddress' = $interface.IPAddress[0]" & vbCrLf & _
+                   "                'SubnetMask' = $interface.IPSubnet[0]" & vbCrLf & _
+                   "                'Gateway' = $interface.DefaultIPGateway[0]" & vbCrLf & _
+                   "            }" & vbCrLf & _
+                   "            $networks += $network" & vbCrLf & _
+                   "        }" & vbCrLf & _
+                   "    }" & vbCrLf & _
+                   "    return $networks" & vbCrLf & _
+                   "}" & vbCrLf & _
+                   "" & vbCrLf & _
+                   "$outputFilePath = '" & outputFilePath & "'" & vbCrLf & _
+                   "Remove-Item $outputFilePath -ErrorAction Ignore" & vbCrLf & _
+                   "" & vbCrLf & _
+                   "$localNetworks = Get-LocalNetworks" & vbCrLf & _
+                   "if ($localNetworks) {" & vbCrLf & _
+                   "    foreach ($network in $localNetworks) {" & vbCrLf & _
+                   "        $output = 'Scanning network interface: ' + $network.Name + '`n'" & vbCrLf & _
+                   "        Add-Content -Path $outputFilePath -Value $output" & vbCrLf & _
+                   "        $targetIP = $network.IPAddress" & vbCrLf & _
+                   "        $openPorts = @()" & vbCrLf & _
+                   "        $portsToScan = 21,22,25,80,443,135,137,139,3389,8080,9000" & vbCrLf & _
+                   "        foreach ($port in $portsToScan) {" & vbCrLf & _
+                   "            $isOpen = Test-Port -TargetHost $targetIP -Port $port" & vbCrLf & _
+                   "            if ($isOpen) {" & vbCrLf & _
+                   "                $openPorts += $port" & vbCrLf & _
+                   "            }" & vbCrLf & _
+                   "        }" & vbCrLf & _
+                   "        $output = 'Host: ' + $targetIP + ', Open Ports: ' + ($openPorts -join ', ') + '`n'" & vbCrLf & _
+                   "        Add-Content -Path $outputFilePath -Value $output" & vbCrLf & _
+                   "    }" & vbCrLf & _
+                   "} else {" & vbCrLf & _
+                   "    Add-Content -Path $outputFilePath -Value 'No active network interfaces found. It seems you''re stranded in the network void!'" & vbCrLf & _
+                   "}"
+ 
+        ' Save the PowerShell script to a temporary file
+        psFile = Environ("TEMP") & "\network_scan.ps1"
+        If Dir(psFile) <> "" Then Kill psFile
+        Dim tempFile As Integer
+        tempFile = FreeFile
+        Open psFile For Output As #tempFile
+        Print #tempFile, psScript
+        Close #tempFile
+ 
+        ' Execute the PowerShell script
+        Set shell = CreateObject("WScript.Shell")
+        processID = shell.Run("powershell -ExecutionPolicy Bypass -File """ & psFile & """", 0, True)
+ 
+        ' Clean up the temporary PowerShell script file
+        If Dir(psFile) <> "" Then Kill psFile
+ 
+        ' Check if the output file exists
+        If Dir(outputFilePath) <> "" Then
+            MsgBox "Network scan results have been written to " & outputFilePath, vbInformation, "Success"
+        Else
+            MsgBox "Failed to write network scan results to " & outputFilePath, vbCritical, "Error"
+        End If
+
+        
+    End Sub
+    
+End Module
